@@ -59,6 +59,195 @@ end
 local unloaded = false
 local S = { walk = 12, sprint = 17, fov = 70 } -- estado general
 
+-- ==================== CONFIGURACIÓN GUARDADA ====================
+local HttpService = game:GetService("HttpService")
+local CONFIG_FILE = "ArticallHub_config.json"
+local SAVE_KEYS = { "lang", "uiMul", "menuKey", "notifs", "confirmDanger", "lockPanel", "coldName", "coldMode" }
+S.lang, S.uiMul, S.menuKey = "es", 1, "RightShift"
+S.notifs, S.confirmDanger, S.lockPanel = true, true, false
+S.coldName, S.coldMode = "", "high"
+
+local function saveConfig()
+   pcall(function()
+      if not writefile then return end
+      local t = {}
+      for _, k in ipairs(SAVE_KEYS) do t[k] = S[k] end
+      writefile(CONFIG_FILE, HttpService:JSONEncode(t))
+   end)
+end
+pcall(function()
+   if isfile and readfile and isfile(CONFIG_FILE) then
+      local t = HttpService:JSONDecode(readfile(CONFIG_FILE))
+      for _, k in ipairs(SAVE_KEYS) do
+         if t[k] ~= nil then S[k] = t[k] end
+      end
+   end
+end)
+local savePending = false
+local function scheduleSave()
+   if savePending then return end
+   savePending = true
+   task.delay(1, function()
+      savePending = false
+      saveConfig()
+   end)
+end
+
+-- ==================== IDIOMAS (ES / EN) ====================
+-- Los textos del código están en español; en inglés se reemplazan por frases de este diccionario.
+local DICT = {
+   -- pestañas y secciones
+   { "Configuración", "Settings" }, { "Jugador", "Player" },
+   { "Acciones Rápidas", "Quick Actions" },
+   { "Debug (para ajustar nombres del juego)", "Debug (to fix game names)" },
+   { "Generador (sin TP, debes estar cerca)", "Generator (no TP, stay close)" },
+   { "Luz / FuseBox (TP corto y vuelve)", "Power / FuseBox (short TP and back)" },
+   { "Puertas e Items", "Doors & Items" },
+   { "Chimenea / Madera (TP, nombres aproximados)", "Fireplace / Wood (TP, approximate names)" },
+   { "Enemigos", "Enemies" }, { "Jugadores y Objetos", "Players & Objects" },
+   { "Teleportaciones Clave", "Key Teleports" },
+   { "Más TPs (coords antiguas, verifica)", "More TPs (old coords, verify)" },
+   { "Posiciones Guardadas", "Saved Positions" }, { "Recursos", "Resources" },
+   { "Velocidad (caminar 12 / correr 17 por defecto)", "Speed (walk 12 / run 17 default)" },
+   { "Iluminación", "Lighting" }, { "Mapa", "Map" }, { "Sistema", "System" },
+   { "Anti-congelación", "Anti-Freeze" }, { "Idioma", "Language" },
+   { "Configuración guardada", "Saved settings" },
+   -- dashboard
+   { "Copiar mi Posición actual (Vector3)", "Copy my current position (Vector3)" },
+   { "Suicidarse / Resetear", "Reset character" }, { "Reconectar Servidor", "Rejoin server" },
+   { "Copiar lista de Prompts del mapa", "Copy map Prompts list" },
+   { "Copiar lista de ClickDetectors del mapa", "Copy map ClickDetectors list" },
+   { "Copiar valores/atributos del personaje (temperatura)", "Copy character values/attributes (temperature)" },
+   { "Copiar estructura de Workspace", "Copy Workspace structure" },
+   -- auto
+   { "Auto Gen: JerryCan -> Generador hasta 100%", "Auto Gen: JerryCan -> Generator to 100%" },
+   { "Solo agarrar JerryCan", "Only grab JerryCan" },
+   { "Solo usar JerryCan en el Generador", "Only use JerryCan on Generator" },
+   { "Auto combustible (cuando baje del umbral)", "Auto fuel (when below threshold)" },
+   { "Aviso de combustible bajo", "Low fuel warning" },
+   { "Umbral de combustible (%)", "Fuel threshold (%)" },
+   { "Reparar luz ahora", "Repair power now" },
+   { "Auto reparar luz (cuando se apague)", "Auto repair power (when it goes out)" },
+   { "Auto Abrir Puertas (cerca)", "Auto open doors (nearby)" },
+   { "Rango auto-puertas", "Auto-door range" },
+   { "Aura de Items (agarra los cercanos)", "Item aura (grabs nearby items)" },
+   { "Radio del aura", "Aura radius" },
+   { "Interacción Instantánea (solo prompts)", "Instant interaction (prompts only)" },
+   { "Rellenar Chimenea", "Refill fireplace" },
+   { "Agarrar Madera / Barricadas", "Grab wood / barricades" },
+   -- esp / tps
+   { "ESP Jugadores", "ESP Players" }, { "ESP Generador", "ESP Generator" },
+   { "ESP Interruptores de luz", "ESP Light switches" },
+   { "Aviso cuando aparece Larry", "Alert when Larry spawns" },
+   { "Teleport a Puerta Principal", "Teleport to Main Door" },
+   { "Teleport a Zona Segura (con Noclip)", "Teleport to Safe Zone (with Noclip)" },
+   { "Guardar posición en Slot ", "Save position in Slot " }, { "Ir a Slot ", "Go to Slot " },
+   { "Dormitorio", "Bedroom" }, { "Baño", "Bathroom" }, { "Escalera", "Stairs" },
+   { "Sala", "Living room" }, { "Consola de energía", "Power console" },
+   -- jugador
+   { "Linterna: batería y cargas infinitas", "Flashlight: infinite battery & charges" },
+   { "Anti-congelación (mantener valores de temperatura)", "Anti-freeze (hold temperature values)" },
+   { "Nombre exacto del valor (opcional)", "Exact value name (optional)" },
+   { "Temperatura: mantener alto (apagado = bajo)", "Temperature: hold HIGH (off = hold low)" },
+   { "Ocultar overlay de frío/escarcha", "Hide cold/frost overlay" },
+   { "Desactivar scripts de frío (agresivo)", "Disable cold scripts (aggressive)" },
+   { "Detectar variable de temperatura (10 s)", "Detect temperature variable (10 s)" },
+   { "Activar velocidades personalizadas", "Enable custom speeds" },
+   { "Velocidad al caminar", "Walk speed" }, { "Velocidad al correr", "Run speed" },
+   { "Cámara: Libre", "Camera: Free" }, { "Cámara: Tercera Persona", "Camera: Third Person" },
+   { "Cámara: Primera Persona", "Camera: First Person" }, { "Cámara", "Camera" },
+   { "Liberar Mouse / Cursor", "Release mouse / cursor" },
+   { "Forzar 3ra persona (anti-reset del juego)", "Force 3rd person (anti game reset)" },
+   { "FOV personalizado", "Custom FOV" }, { "Campo de visión (FOV)", "Field of view (FOV)" },
+   -- misc
+   { "Fullbright (quitar oscuridad)", "Fullbright (remove darkness)" },
+   { "Quitar Niebla", "Remove fog" }, { "Quitar efecto de Estática", "Remove static effect" },
+   { "Quitar barreras de closets (mejor esfuerzo)", "Remove closet barriers (best effort)" },
+   { "Destruir UI (pide confirmación)", "Destroy UI (asks to confirm)" },
+   -- config
+   { "Cambiar tecla del menú", "Change menu key" }, { "Tamaño del panel (%)", "Panel size (%)" },
+   { "Notificaciones", "Notifications" },
+   { "Confirmar acciones peligrosas", "Confirm dangerous actions" },
+   { "Bloquear arrastre del panel", "Lock panel dragging" },
+   { "Restablecer posición del panel", "Reset panel position" },
+   { "Guardar configuración ahora", "Save settings now" },
+   -- mensajes
+   { "¿Seguro? Toca de nuevo para confirmar", "Sure? Tap again to confirm" },
+   { "Articall Hub v2.2 cargado. Tecla del menú: ", "Articall Hub v2.2 loaded. Menu key: " },
+   { "Espera, hay otra acción en curso", "Wait, another action is running" },
+   { "JerryCan en mano", "JerryCan in hand" }, { "JerryCan usado", "JerryCan used" },
+   { "Necesitas la llave (Wrench) en el inventario", "You need the Wrench in your inventory" },
+   { "No encontré el WarningSign del FuseBox", "FuseBox WarningSign not found" },
+   { "No encontré el FuseBox", "FuseBox not found" },
+   { "No pude agarrar el JerryCan: acércate al generador", "Couldn't grab the JerryCan: get closer to the generator" },
+   { "No pude usar el JerryCan: acércate al generador", "Couldn't use the JerryCan: get closer to the generator" },
+   { "No pude agarrarlo: acércate", "Couldn't grab it: get closer" },
+   { "No pude usarlo: acércate al generador", "Couldn't use it: get closer to the generator" },
+   { "No encontré Shack/JerryCan/Generator (usa Debug)", "Shack/JerryCan/Generator not found (use Debug)" },
+   { "Posición copiada al portapapeles", "Position copied to clipboard" },
+   { "[!] Generador al ", "[!] Generator at " },
+   { "[!] Larry apareció en el mapa", "[!] Larry spawned on the map" },
+   { "Generador al 100%", "Generator at 100%" }, { "Generador: ", "Generator: " },
+   { "Secuencia ejecutada", "Sequence executed" },
+   { " ClickDetectors copiados", " ClickDetectors copied" }, { " prompts copiados", " prompts copied" },
+   { " líneas copiadas", " lines copied" }, { " valores copiados", " values copied" },
+   { " barreras desactivadas", " barriers disabled" },
+   { " activado(s)", " activated" }, { " activado", " activated" },
+   { "Chimenea", "Fireplace" }, { "Madera", "Wood" },
+   { ": no encontré objetos (usa Debug)", ": no objects found (use Debug)" },
+   { ": no encontrado (usa Debug)", ": not found (use Debug)" },
+   { "cable(s) reparado(s)", "wire(s) repaired" }, { "Luz: ", "Power: " },
+   { "Detección iniciada: quédate en la zona fría 10 s", "Detection started: stay in the cold area for 10 s" },
+   { "Ya hay una detección en curso", "Detection already running" },
+   { "Detección lista: ", "Detection done: " }, { " cambios copiados", " changes copied" },
+   { "Presiona una tecla para el menú...", "Press a key for the menu..." },
+   { "Tecla del menú: ", "Menu key: " }, { "Ajustes guardados", "Settings saved" },
+   { "Nombre guardado: ", "Name saved: " }, { "Nombre borrado (modo automático)", "Name cleared (automatic mode)" },
+}
+table.sort(DICT, function(a, b) return #a[1] > #b[1] end)
+
+local function plainReplace(str, a, b)
+   local out, i = {}, 1
+   while true do
+      local st, en = string.find(str, a, i, true)
+      if not st then
+         table.insert(out, str:sub(i))
+         break
+      end
+      table.insert(out, str:sub(i, st - 1))
+      table.insert(out, b)
+      i = en + 1
+   end
+   return table.concat(out)
+end
+
+local function tr(text)
+   if S.lang ~= "en" then return text end
+   for _, pair in ipairs(DICT) do
+      if string.find(text, pair[1], 1, true) then text = plainReplace(text, pair[1], pair[2]) end
+   end
+   return text
+end
+
+local i18nReg = {}
+local function regText(inst, es, prefix, mode)
+   local e = { inst = inst, es = es, prefix = prefix or "", upper = (mode == "upper") }
+   table.insert(i18nReg, e)
+   local t = tr(es)
+   if e.upper then t = t:upper() end
+   inst.Text = e.prefix .. t
+end
+local function setLang(l)
+   S.lang = l
+   for _, e in ipairs(i18nReg) do
+      pcall(function()
+         local t = tr(e.es)
+         if e.upper then t = t:upper() end
+         e.inst.Text = e.prefix .. t
+      end)
+   end
+end
+
 local function tween(obj, props, t)
    TweenService:Create(obj, TweenInfo.new(t or 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
@@ -123,7 +312,7 @@ notifLayout.Padding = UDim.new(0, 6)
 notifLayout.Parent = NotifHolder
 
 local function notify(text, dur)
-   if unloaded then return end
+   if unloaded or S.notifs == false then return end
    local f = Instance.new("Frame")
    f.BackgroundColor3 = C.dark
    f.BackgroundTransparency = 1
@@ -135,7 +324,7 @@ local function notify(text, dur)
    l.Position = UDim2.new(0, 12, 0, 0)
    l.Size = UDim2.new(1, -24, 1, 0)
    l.Font = Enum.Font.GothamSemibold
-   l.Text = text
+   l.Text = tr(text)
    l.TextColor3 = C.white
    l.TextTransparency = 1
    l.TextSize = 12
@@ -155,26 +344,32 @@ local function notify(text, dur)
 end
 
 -- Arrastre propio (mouse + táctil)
-local function makeDraggable(frame, handle, onClick, getScale)
-   local dragging, startMouse, startPos, moved = false, nil, nil, 0
+local function makeDraggable(frame, handle, onClick, getScale, isLocked)
+   local dragging, startInput, startMouse, startPos, moved = false, nil, nil, nil, 0
    handle.InputBegan:Connect(function(input)
       if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+         if isLocked and isLocked() and not onClick then return end
          dragging, moved = true, 0
-         startMouse, startPos = input.Position, frame.Position
-         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-               dragging = false
-               if onClick and moved < 6 then onClick() end
-            end
-         end)
+         startInput, startMouse, startPos = input, input.Position, frame.Position
       end
    end)
+   -- un solo InputEnded global: no deja conexiones colgadas entre toques
+   Maid:Add(UserInputService.InputEnded:Connect(function(input)
+      if not dragging or not startInput then return end
+      local sameTouch = (startInput.UserInputType == Enum.UserInputType.Touch and input == startInput)
+      local sameMouse = (startInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1)
+      if sameTouch or sameMouse then
+         dragging, startInput = false, nil
+         if onClick and moved < 6 then onClick() end
+      end
+   end))
    Maid:Add(UserInputService.InputChanged:Connect(function(input)
       if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
          local d = input.Position - startMouse
          moved = math.max(moved, d.Magnitude)
-         local s = getScale and getScale() or 1
-         frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X / s, startPos.Y.Scale, startPos.Y.Offset + d.Y / s)
+         if isLocked and isLocked() then return end
+         local sc = getScale and getScale() or 1
+         frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X / sc, startPos.Y.Scale, startPos.Y.Offset + d.Y / sc)
       end
    end))
 end
@@ -239,7 +434,7 @@ UIScaleObj.Parent = MainFrame
 local function updateScale()
    local cam = Workspace.CurrentCamera
    local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
-   UIScaleObj.Scale = math.clamp(math.min(vp.X / 760, vp.Y / 500), 0.5, 1)
+   UIScaleObj.Scale = math.clamp(math.min(vp.X / 760, vp.Y / 500), 0.5, 1) * (S.uiMul or 1)
 end
 updateScale()
 pcall(function()
@@ -291,11 +486,16 @@ CloseBtn.Parent = TopBar
 do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = CloseBtn end
 hoverFx(CloseBtn, Color3.fromRGB(235, 235, 235), Color3.fromRGB(220, 220, 220), Color3.fromRGB(200, 200, 200))
 
-local function toggleMenu() MainFrame.Visible = not MainFrame.Visible end
+local lastToggle = 0
+local function toggleMenu()
+   if os.clock() - lastToggle < 0.25 then return end
+   lastToggle = os.clock()
+   MainFrame.Visible = not MainFrame.Visible
+end
 do
    local armed = false
    onTap(CloseBtn, function()
-      if not armed then
+      if S.confirmDanger ~= false and not armed then
          armed = true
          CloseBtn.Text = "?"
          task.delay(2, function()
@@ -308,11 +508,19 @@ do
       MainFrame.Visible = false
    end)
 end
-makeDraggable(MainFrame, TopBar, nil, function() return UIScaleObj.Scale end)
+makeDraggable(MainFrame, TopBar, nil, function() return UIScaleObj.Scale end, function() return S.lockPanel end)
 makeDraggable(ToggleBtn, ToggleBtn, toggleMenu, nil)
 
 Maid:Add(UserInputService.InputBegan:Connect(function(input, gp)
-   if not gp and input.KeyCode == Enum.KeyCode.RightShift then toggleMenu() end
+   if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+   if S.waitingKey then
+      S.waitingKey = false
+      S.menuKey = input.KeyCode.Name
+      scheduleSave()
+      notify("Tecla del menú: " .. S.menuKey)
+      return
+   end
+   if not gp and input.KeyCode.Name == S.menuKey then toggleMenu() end
 end))
 
 -- Pestañas
@@ -359,7 +567,7 @@ local function createTab(name)
    tabBtn.BackgroundColor3 = C.hover
    tabBtn.Size = UDim2.new(1, -4, 0, 40)
    tabBtn.Font = Enum.Font.GothamSemibold
-   tabBtn.Text = "  " .. name
+   regText(tabBtn, name, "  ")
    tabBtn.TextColor3 = Color3.fromRGB(80, 80, 80)
    tabBtn.TextSize = 13
    tabBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -391,6 +599,7 @@ local ESPPage = createTab("ESPs")
 local TPsPage = createTab("TPs")
 local PlayerPage = createTab("Jugador")
 local MiscPage = createTab("Misc")
+local ConfigPage = createTab("Configuración")
 selectTab(1)
 
 -- Componentes
@@ -404,7 +613,7 @@ local function addSection(page, titleText)
    sec.Position = UDim2.new(0, 4, 0, 6)
    sec.Size = UDim2.new(0, 300, 0, 20)
    sec.Font = Enum.Font.GothamBold
-   sec.Text = titleText:upper()
+   regText(sec, titleText, "", "upper")
    sec.TextColor3 = C.dim
    sec.TextSize = 11
    sec.TextXAlignment = Enum.TextXAlignment.Left
@@ -422,7 +631,7 @@ local function baseRow(page, name)
    btn.BackgroundColor3 = C.white
    btn.Size = UDim2.new(1, -10, 0, 42)
    btn.Font = Enum.Font.GothamSemibold
-   btn.Text = "  " .. name
+   regText(btn, name, "  ")
    btn.TextColor3 = Color3.fromRGB(30, 30, 30)
    btn.TextSize = 13
    btn.TextXAlignment = Enum.TextXAlignment.Left
@@ -439,16 +648,16 @@ local function addButton(page, name, a, b)
    local btn = baseRow(page, name)
    local armed = false
    onTap(btn, function()
-      if confirm and not armed then
+      if confirm and S.confirmDanger ~= false and not armed then
          armed = true
-         btn.Text = "  ¿Seguro? Toca de nuevo para confirmar"
+         btn.Text = "  " .. tr("¿Seguro? Toca de nuevo para confirmar")
          task.delay(2.5, function()
-            if armed then armed = false; btn.Text = "  " .. name end
+            if armed then armed = false; btn.Text = "  " .. tr(name) end
          end)
          return
       end
       armed = false
-      btn.Text = "  " .. name
+      btn.Text = "  " .. tr(name)
       local ok, err = pcall(callback)
       if not ok then notify("Error: " .. tostring(err), 4) end
    end)
@@ -502,7 +711,7 @@ local function addSlider(page, name, min, max, default, callback)
    label.Position = UDim2.new(0, 12, 0, 6)
    label.Size = UDim2.new(0.6, 0, 0, 18)
    label.Font = Enum.Font.GothamSemibold
-   label.Text = name
+   regText(label, name)
    label.TextColor3 = Color3.fromRGB(30, 30, 30)
    label.TextSize = 13
    label.TextXAlignment = Enum.TextXAlignment.Left
@@ -566,6 +775,42 @@ local function addSlider(page, name, min, max, default, callback)
          fromInput(input)
       end
    end))
+end
+
+local function addTextBox(page, name, placeholder, default, callback)
+   local frame = Instance.new("Frame")
+   frame.BackgroundColor3 = C.white
+   frame.Size = UDim2.new(1, -10, 0, 46)
+   frame.Parent = page
+   local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = frame
+   local st = Instance.new("UIStroke"); st.Color = C.line; st.Thickness = 1.2; st.Parent = frame
+
+   local label = Instance.new("TextLabel")
+   label.BackgroundTransparency = 1
+   label.Position = UDim2.new(0, 12, 0, 0)
+   label.Size = UDim2.new(0.5, -12, 1, 0)
+   label.Font = Enum.Font.GothamSemibold
+   label.TextColor3 = Color3.fromRGB(30, 30, 30)
+   label.TextSize = 12
+   label.TextWrapped = true
+   label.TextXAlignment = Enum.TextXAlignment.Left
+   label.Parent = frame
+   regText(label, name)
+
+   local box = Instance.new("TextBox")
+   box.BackgroundColor3 = C.hover
+   box.Position = UDim2.new(0.5, 0, 0.5, -15)
+   box.Size = UDim2.new(0.5, -12, 0, 30)
+   box.Font = Enum.Font.Gotham
+   box.TextSize = 13
+   box.TextColor3 = C.dark
+   box.PlaceholderText = placeholder
+   box.Text = default or ""
+   box.ClearTextOnFocus = false
+   box.Parent = frame
+   local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 6); bc.Parent = box
+   box.FocusLost:Connect(function() pcall(callback, box.Text) end)
+   return box
 end
 
 -- ==================== PROMPTS / INTERACCIÓN ====================
@@ -1191,58 +1436,230 @@ local function applyFlashlight()
    end
 end
 
--- Anti-congelación (heurístico: busca valores con nombres de temperatura/frío)
-local tempList, tempScan = {}, 0
-local function classifyTemp(name)
+-- Anti-congelación: mantiene valores de temperatura/frío (por nombre exacto o heurístico)
+local TEMP_BAD = { "cold", "freez", "chill", "frost", "hypo" }
+local TEMP_GOOD = { "temp", "warm", "heat" }
+local COLD_GUI = { "frost", "freez", "blizzard", "snow", "cold" }
+local COLD_SCRIPT = { "cold", "freez", "temp", "frost" }
+local tempList, coldGuiList, coldScriptList, tempScan = {}, {}, {}, 0
+local coldGuiOrig, coldScriptOrig = {}, {}
+local refStore = setmetatable({}, { __mode = "k" })
+local customEntry, customLast = nil, 0
+
+local function matchAny(name, list)
    local n = name:lower()
-   for _, pat in ipairs({ "cold", "freez", "chill", "frost" }) do
-      if n:find(pat, 1, true) then return "bad" end
+   for _, pat in ipairs(list) do
+      if n:find(pat, 1, true) then return true end
    end
-   for _, pat in ipairs({ "temp", "warm", "heat" }) do
-      if n:find(pat, 1, true) then return "good" end
-   end
+   return false
+end
+
+local function resetTempRefs()
+   refStore = setmetatable({}, { __mode = "k" })
+   customEntry, customLast = nil, 0
+   tempScan = 0
+end
+
+local function classifyTemp(name)
+   if matchAny(name, TEMP_BAD) then return "bad" end
+   if matchAny(name, TEMP_GOOD) then return "good" end
    return nil
 end
+
 local function scanTemp()
    tempScan = os.clock()
-   tempList = {}
-   for _, root in ipairs({ LocalPlayer.Character, LocalPlayer }) do
-      if root then
-         for _, d in ipairs(root:GetDescendants()) do
-            if (d:IsA("NumberValue") or d:IsA("IntValue")) and not d:IsDescendantOf(ScreenGui) then
-               local k = classifyTemp(d.Name)
-               if k then table.insert(tempList, { inst = d, kind = k }) end
-            end
+   tempList, coldGuiList, coldScriptList = {}, {}, {}
+   local custom = S.coldName
+   local heuristic = not (custom and custom ~= "")
+   local roots = { LocalPlayer.Character, LocalPlayer, Workspace:FindFirstChild(LocalPlayer.Name) }
+   local seen = {}
+   local function addAttrs(inst)
+      for name, val in pairs(inst:GetAttributes()) do
+         if type(val) == "number" then
+            local k = classifyTemp(name)
+            if k then table.insert(tempList, { inst = inst, attr = name, kind = k }) end
          end
-         for name, val in pairs(root:GetAttributes()) do
-            if type(val) == "number" then
-               local k = classifyTemp(name)
-               if k then table.insert(tempList, { inst = root, attr = name, kind = k }) end
+      end
+   end
+   for _, root in ipairs(roots) do
+      if root and not seen[root] then
+         seen[root] = true
+         if heuristic then addAttrs(root) end
+         for _, d in ipairs(root:GetDescendants()) do
+            if not seen[d] and not d:IsDescendantOf(ScreenGui) then
+               seen[d] = true
+               if heuristic then
+                  if d:IsA("NumberValue") or d:IsA("IntValue") then
+                     local k = classifyTemp(d.Name)
+                     if k then table.insert(tempList, { inst = d, kind = k }) end
+                  end
+                  if not d:IsA("GuiObject") and not d:IsA("BasePart") then addAttrs(d) end
+               end
+               if (d:IsA("GuiObject") or d:IsA("ScreenGui")) and matchAny(d.Name, COLD_GUI) then
+                  table.insert(coldGuiList, d)
+               elseif d:IsA("LocalScript") and matchAny(d.Name, COLD_SCRIPT) then
+                  table.insert(coldScriptList, d)
+               end
             end
          end
       end
    end
 end
+
+local function holdEntry(e, kind)
+   local cur
+   if e.attr then cur = e.inst:GetAttribute(e.attr) else cur = e.inst.Value end
+   if type(cur) ~= "number" then return end
+   local function set(v)
+      if e.attr then e.inst:SetAttribute(e.attr, v) else e.inst.Value = v end
+   end
+   local store = refStore[e.inst]
+   if not store then store = {}; refStore[e.inst] = store end
+   local k = e.attr or "__value"
+   if kind == "bad" then
+      store[k] = math.min(store[k] or cur, cur)   -- "frío": no debe subir
+      if cur > store[k] then set(store[k]) end
+   else
+      store[k] = math.max(store[k] or cur, cur)   -- "temperatura": no debe bajar
+      if cur < store[k] then set(store[k]) end
+   end
+end
+
+local function findCustom(name)
+   local roots = { LocalPlayer.Character, LocalPlayer, Workspace:FindFirstChild(LocalPlayer.Name), ReplicatedStorage, Lighting, Workspace }
+   for _, r in ipairs(roots) do
+      if r then
+         if type(r:GetAttribute(name)) == "number" then return { inst = r, attr = name } end
+         local v = r:FindFirstChild(name, true)
+         if v and (v:IsA("NumberValue") or v:IsA("IntValue")) then return { inst = v } end
+      end
+   end
+   local c = LocalPlayer.Character
+   local h = c and c:FindFirstChildOfClass("Humanoid")
+   if h and type(h:GetAttribute(name)) == "number" then return { inst = h, attr = name } end
+   return nil
+end
+
+local function restoreColdGui()
+   for g, v in pairs(coldGuiOrig) do
+      pcall(function() if g:IsA("ScreenGui") then g.Enabled = v else g.Visible = v end end)
+   end
+   coldGuiOrig = {}
+end
+local function restoreColdScripts()
+   for sc, v in pairs(coldScriptOrig) do pcall(function() sc.Disabled = v end) end
+   coldScriptOrig = {}
+end
+
 local function applyTemp()
    if os.clock() - tempScan > 4 then scanTemp() end
-   for _, e in ipairs(tempList) do
-      pcall(function()
-         local cur
-         if e.attr then cur = e.inst:GetAttribute(e.attr) else cur = e.inst.Value end
-         if type(cur) ~= "number" then return end
-         if e.kind == "bad" then
-            e.ref = math.min(e.ref or cur, cur)   -- "frío" no debe subir
-            if cur > e.ref then
-               if e.attr then e.inst:SetAttribute(e.attr, e.ref) else e.inst.Value = e.ref end
-            end
-         else
-            e.ref = math.max(e.ref or cur, cur)   -- "temperatura" no debe bajar
-            if cur < e.ref then
-               if e.attr then e.inst:SetAttribute(e.attr, e.ref) else e.inst.Value = e.ref end
-            end
+   if S.antiCold then
+      local custom = S.coldName
+      if custom and custom ~= "" then
+         local stale = (not customEntry) or customEntry.name ~= custom or (not customEntry.e)
+            or (customEntry.e.inst.Parent == nil)
+         if stale and os.clock() - customLast > 2 then
+            customLast = os.clock()
+            customEntry = { name = custom, e = findCustom(custom) }
          end
-      end)
+         local e = customEntry and customEntry.e
+         if e then pcall(holdEntry, e, (S.coldMode == "low") and "bad" or "good") end
+      else
+         for _, e in ipairs(tempList) do pcall(holdEntry, e, e.kind) end
+      end
    end
+   if S.coldGui then
+      for _, g in ipairs(coldGuiList) do
+         pcall(function()
+            if not g.Parent then return end
+            if g:IsA("ScreenGui") then
+               if coldGuiOrig[g] == nil then coldGuiOrig[g] = g.Enabled end
+               g.Enabled = false
+            else
+               if coldGuiOrig[g] == nil then coldGuiOrig[g] = g.Visible end
+               g.Visible = false
+            end
+         end)
+      end
+   end
+   if S.coldScripts then
+      for _, sc in ipairs(coldScriptList) do
+         pcall(function()
+            if coldScriptOrig[sc] == nil then coldScriptOrig[sc] = sc.Disabled end
+            sc.Disabled = true
+         end)
+      end
+   end
+end
+
+-- Detector: compara valores antes/después de 10 s en la zona fría para encontrar la variable real
+local detecting = false
+local function snapshotNumbers()
+   local snap, texts, n = {}, {}, 0
+   local function addInst(d)
+      if d:IsA("NumberValue") or d:IsA("IntValue") then snap[d:GetFullName()] = d.Value end
+      if not d:IsA("GuiObject") and not d:IsA("BasePart") then
+         for name, val in pairs(d:GetAttributes()) do
+            if type(val) == "number" then snap[d:GetFullName() .. " [attr] " .. name] = val end
+         end
+      end
+   end
+   for _, root in ipairs({ LocalPlayer.Character, LocalPlayer, ReplicatedStorage, Lighting, Workspace }) do
+      if root then
+         addInst(root)
+         for _, d in ipairs(root:GetDescendants()) do
+            n += 1
+            if n % 2500 == 0 then task.wait() end
+            if not d:IsDescendantOf(ScreenGui) then addInst(d) end
+         end
+      end
+   end
+   local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+   if pg then
+      for _, d in ipairs(pg:GetDescendants()) do
+         if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.Text ~= "" and not d:IsDescendantOf(ScreenGui) then
+            texts[d:GetFullName()] = d.Text
+         end
+      end
+   end
+   return snap, texts
+end
+
+local function detectTemperature()
+   if detecting then notify("Ya hay una detección en curso", 3) return end
+   detecting = true
+   task.spawn(function()
+      local ok, err = pcall(function()
+         notify("Detección iniciada: quédate en la zona fría 10 s", 5)
+         local a, ta = snapshotNumbers()
+         task.wait(10)
+         local b, tb = snapshotNumbers()
+         local diffs = {}
+         for k, v1 in pairs(a) do
+            local v2 = b[k]
+            if v2 and v2 ~= v1 then table.insert(diffs, { k = k, a = v1, b = v2, d = math.abs(v2 - v1) }) end
+         end
+         table.sort(diffs, function(x, y) return x.d > y.d end)
+         local lines = { "== Valores numéricos que cambiaron en 10 s (mayor cambio primero) ==" }
+         for i = 1, math.min(#diffs, 60) do
+            local e = diffs[i]
+            table.insert(lines, string.format("%s: %s -> %s", e.k, tostring(e.a), tostring(e.b)))
+         end
+         table.insert(lines, "")
+         table.insert(lines, "== Textos de HUD que cambiaron ==")
+         local tl = {}
+         for k, t1 in pairs(ta) do
+            local t2 = tb[k]
+            if t2 and t2 ~= t1 then table.insert(tl, k .. ': "' .. t1 .. '" -> "' .. t2 .. '"') end
+         end
+         table.sort(tl)
+         for i = 1, math.min(#tl, 30) do table.insert(lines, tl[i]) end
+         safeSetClipboard(table.concat(lines, "\n"))
+         notify("Detección lista: " .. (#diffs + #tl) .. " cambios copiados", 5)
+      end)
+      detecting = false
+      if not ok then notify("Error: " .. tostring(err), 4) end
+   end)
 end
 
 -- Reparar luz: abre el FuseBox, usa la llave y repara los cables con chispas
@@ -1388,7 +1805,7 @@ Maid:Add(RunService.Heartbeat:Connect(function(dt)
          if root and S.autoDoors then autoDoorsStep(root) end
          if root and S.aura then auraStep(root) end
          if S.flash then applyFlashlight() end
-         if S.antiCold then applyTemp() end
+         if S.antiCold or S.coldGui or S.coldScripts then applyTemp() end
          if S.cam3 then
             LocalPlayer.CameraMode = Enum.CameraMode.Classic
             LocalPlayer.CameraMaxZoomDistance = 1000
@@ -1590,10 +2007,36 @@ addSection(PlayerPage, "Recursos")
 addToggle(PlayerPage, "Infinite Stamina", function(v) S.stam = v end)
 addToggle(PlayerPage, "Infinite Oxygen", function(v) S.oxygen = v end)
 addToggle(PlayerPage, "Linterna: batería y cargas infinitas", function(v) S.flash = v end)
-addToggle(PlayerPage, "Anti-congelación (heurístico)", function(v)
+addSection(PlayerPage, "Anti-congelación")
+addToggle(PlayerPage, "Anti-congelación (mantener valores de temperatura)", function(v)
    S.antiCold = v
-   tempScan = 0
+   resetTempRefs()
 end)
+addTextBox(PlayerPage, "Nombre exacto del valor (opcional)", "ej: Temperature", S.coldName or "", function(t)
+   t = (t or ""):gsub("^%s+", "")
+   t = t:gsub("%s+$", "")
+   S.coldName = t
+   resetTempRefs()
+   scheduleSave()
+   notify(t ~= "" and ("Nombre guardado: " .. t) or "Nombre borrado (modo automático)")
+end)
+do
+   local modeToggle = addToggle(PlayerPage, "Temperatura: mantener alto (apagado = bajo)", function(v)
+      S.coldMode = v and "high" or "low"
+      resetTempRefs()
+      scheduleSave()
+   end)
+   modeToggle.Set(S.coldMode ~= "low", true)
+end
+addToggle(PlayerPage, "Ocultar overlay de frío/escarcha", function(v)
+   S.coldGui = v
+   if not v then restoreColdGui() end
+end)
+addToggle(PlayerPage, "Desactivar scripts de frío (agresivo)", function(v)
+   S.coldScripts = v
+   if not v then restoreColdScripts() end
+end)
+addButton(PlayerPage, "Detectar variable de temperatura (10 s)", detectTemperature)
 addSection(PlayerPage, "Velocidad (caminar 12 / correr 17 por defecto)")
 addToggle(PlayerPage, "Activar velocidades personalizadas", function(v)
    S.speedOn = v
@@ -1671,6 +2114,51 @@ addButton(MiscPage, "Destruir UI (pide confirmación)", true, function()
    if env.ArticallUnload then env.ArticallUnload() end
 end)
 
+-- ==================== CONTENIDO: CONFIGURACIÓN ====================
+addSection(ConfigPage, "Idioma")
+addButton(ConfigPage, "Español", function()
+   setLang("es")
+   scheduleSave()
+   notify("Idioma: Español")
+end)
+addButton(ConfigPage, "English", function()
+   setLang("en")
+   scheduleSave()
+   notify("Language: English")
+end)
+
+addSection(ConfigPage, "Panel")
+addButton(ConfigPage, "Cambiar tecla del menú", function()
+   S.waitingKey = true
+   notify("Presiona una tecla para el menú...", 4)
+end)
+addSlider(ConfigPage, "Tamaño del panel (%)", 60, 130, math.floor((S.uiMul or 1) * 100 + 0.5), function(v)
+   local nv = v / 100
+   if math.abs(nv - (S.uiMul or 1)) > 0.001 then
+      S.uiMul = nv
+      updateScale()
+      scheduleSave()
+   end
+end)
+do
+   local t1 = addToggle(ConfigPage, "Notificaciones", function(v) S.notifs = v; scheduleSave() end)
+   t1.Set(S.notifs ~= false, true)
+   local t2 = addToggle(ConfigPage, "Confirmar acciones peligrosas", function(v) S.confirmDanger = v; scheduleSave() end)
+   t2.Set(S.confirmDanger ~= false, true)
+   local t3 = addToggle(ConfigPage, "Bloquear arrastre del panel", function(v) S.lockPanel = v; scheduleSave() end)
+   t3.Set(S.lockPanel == true, true)
+end
+addButton(ConfigPage, "Restablecer posición del panel", function()
+   MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+   ToggleBtn.Position = UDim2.new(0, 20, 0, 100)
+end)
+
+addSection(ConfigPage, "Configuración guardada")
+addButton(ConfigPage, "Guardar configuración ahora", function()
+   saveConfig()
+   notify("Ajustes guardados")
+end)
+
 -- ==================== DESCARGA LIMPIA ====================
 local function unload()
    if unloaded then return end
@@ -1682,6 +2170,8 @@ local function unload()
       restoreKeys(FOG_KEYS)
       restoreAtmos()
       restoreStatic()
+      restoreColdGui()
+      restoreColdScripts()
       if S.speedOn then
          local c = LocalPlayer.Character
          local h = c and c:FindFirstChildOfClass("Humanoid")
@@ -1702,4 +2192,4 @@ local function unload()
 end
 env.ArticallUnload = unload
 
-notify("Articall Hub v2.2 cargado. RightShift = mostrar/ocultar", 4)
+notify("Articall Hub v2.2 cargado. Tecla del menú: " .. S.menuKey, 4)
